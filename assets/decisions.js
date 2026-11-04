@@ -1,0 +1,18 @@
+'use strict';
+(async()=>{
+ const panel=document.querySelector('[data-decision]');if(!panel)return;
+ const e=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ let guide;try{const response=await fetch('/torbay-drainage-guide/assets/decision-guides.json');if(!response.ok)throw Error();guide=(await response.json())[panel.dataset.decision];if(!guide?.nodes||!Object.hasOwn(guide.nodes,guide.start)||!Object.values(guide.nodes).every(n=>n&&typeof n==='object'&&(typeof n.question==='string'?Array.isArray(n.options)&&n.options.length>0&&n.options.every(o=>Array.isArray(o)&&o.length===2&&typeof o[0]==='string'&&typeof o[1]==='string'&&Object.hasOwn(guide.nodes,o[1])):typeof n.result==='string'&&typeof n.text==='string'&&Array.isArray(n.links)&&n.links.every(l=>typeof l?.label==='string'&&typeof l.url==='string'&&/^(?:\/(?!\/)|https:\/\/)/.test(l.url)))&&(!n.link||typeof n.link==='string'&&/^\/(?!\/)/.test(n.link))))throw Error();}catch{panel.hidden=false;panel.querySelector('.decision-content').innerHTML='<p>The interactive route could not load. Read the complete route below or <a href="/torbay-drainage-guide/rules/">open the rule register</a>.</p>';panel.querySelector('.decision-actions').hidden=true;document.querySelector('.decision-all').open=true;return;}
+ const fromAddress=()=>{const raw=new URLSearchParams(location.search).get('route'),parts=raw?.split(',');if(!parts||parts.length>50||parts[0]!==guide.start||parts.some((id,i)=>!Object.hasOwn(guide.nodes,id)||i&&!(guide.nodes[parts[i-1]].options||[]).some(o=>o[1]===id)))return [guide.start];return parts;};
+ let route=fromAddress();
+ const commit=()=>{const url=new URL(location.href);if(route.length===1)url.searchParams.delete('route');else url.searchParams.set('route',route.join(','));const next=url.pathname+url.search+url.hash;if(next!==location.pathname+location.search+location.hash)history.pushState(null,'',next);};
+ const content=panel.querySelector('.decision-content'),back=panel.querySelector('[data-decision-back]');
+ function render(focus=false){const n=guide.nodes[route[route.length-1]];panel.querySelector('.decision-position').textContent=n.result?'Checks to examine':`Question ${route.length}`;back.disabled=route.length===1;
+ content.innerHTML=n.question?`<h2 tabindex="-1">${e(n.question)}</h2><div class="decision-options">${n.options.map(([label,next])=>`<button type="button" data-next="${e(next)}">${e(label)}</button>`).join('')}</div>`:`<h2 tabindex="-1">${e(n.result)}</h2><p>${e(n.text)}</p><h3>Read the checks and their sources</h3><ul class="check-links">${n.links.map(l=>`<li><a href="${e(l.url)}">${e(l.label)}</a></li>`).join('')}</ul>${n.link?`<p><a class="button" href="${e(n.link)}">Open the application checklist</a></p>`:''}${panel.dataset.decision==='discharge'?'<p><a href="/torbay-drainage-guide/tools/#runoff-comparison">Compare the numerical criteria</a> · <a href="/torbay-drainage-guide/torbay-requirements/">Read Torbay local criteria</a></p>':''}`;
+ if(focus)content.querySelector('h2').focus();}
+ content.addEventListener('click',event=>{const button=event.target.closest('[data-next]');if(!button)return;const next=button.dataset.next;if(!Object.hasOwn(guide.nodes,next)||!(guide.nodes[route.at(-1)].options||[]).some(o=>o[1]===next))return;route.push(next);commit();render(true);});
+ back.addEventListener('click',()=>{if(route.length>1){route.pop();commit();render(true);}});
+ panel.querySelector('[data-decision-reset]').addEventListener('click',()=>{route=[guide.start];commit();render(true);});
+ addEventListener('popstate',()=>{route=fromAddress();render();});
+ panel.hidden=false;render();
+})();

@@ -1,0 +1,16 @@
+.guide-video-training{max-width:960px;margin-bottom:36px}
+.guide-video-training .guide-video{margin-bottom:24px}
+.guide-video-chapters h2{margin-bottom:8px}
+.guide-video-chapters ol{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 24px;list-style:none;padding:0;margin:16px 0}
+.guide-video-chapters a{display:flex;gap:12px;align-items:baseline;padding:9px 0;text-decoration:underline;text-underline-offset:3px}
+.guide-video-time{min-width:3.1em;font-variant-numeric:tabular-nums;font-weight:bold}
+.guide-video-chapters a[aria-current=true]{font-weight:bold}
+.guide-video-chapters a:focus-visible,.guide-video-transcript summary:focus-visible{outline:3px solid #ffdd00;outline-offset:3px}
+.guide-video-status{min-height:1.5em}
+.guide-video-downloads{display:flex;flex-wrap:wrap;gap:12px 24px;margin:24px 0}
+.guide-video-transcript{border-top:1px solid #b1b4b6;border-bottom:1px solid #b1b4b6;padding:16px 0}
+.guide-video-transcript summary{cursor:pointer;font-weight:bold;text-decoration:underline;text-underline-offset:3px}
+.guide-video-transcript .prose{padding-top:12px}
+@media(max-width:600px){.guide-video-chapters ol{grid-template-columns:1fr}}
+@media print{.guide-video-chapters,.guide-video-downloads,.guide-video-status{display:none}.guide-video-transcript>div{display:block}}
+video::cue{font-family:"Segoe UI",Arial,sans-serif;font-size:20px;color:#fff;background:rgba(35,58,83,.94)}video:fullscreen::cue{font-size:32px}

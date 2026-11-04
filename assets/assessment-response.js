@@ -1,0 +1,237 @@
+/* Site location, constraints and consultation response: pure functions shared by the browser and the tests.
+   Nothing here sends data anywhere. Grid conversion is local and approximate (a few metres), for centring maps only. */
+(function(root,factory){const api=factory();if(typeof module==='object'&&module.exports)module.exports=api;else root.TorbayResponse=api;})(typeof window!=='undefined'?window:this,function(){
+'use strict';
+
+const RECOMMENDATIONS=[['no-objection','No objection'],['conditions','No objection subject to conditions'],['holding','Holding objection (information required)'],['objection','Objection']];
+
+// Constraint categories and their related checks. Engineering content: listed for review, not approved.
+const CONSTRAINTS=[
+ {key:'flood',label:'Flood zone (rivers and sea)',options:['Flood Zone 1','Flood Zone 2','Flood Zone 3'],source:'Environment Agency Flood Map for Planning',rules:['FR-04','FR-05','FR-06','FR-07','FR-12']},
+ {key:'cda',label:'Critical drainage area',options:['Inside the critical drainage area','Outside the critical drainage area'],source:'Torbay critical drainage area',rules:['FR-01','FR-02','RV-02','RV-07']},
+ {key:'spz',label:'Groundwater source protection zone',options:['SPZ 1','SPZ 2','SPZ 3','Not in a source protection zone'],source:'Environment Agency groundwater source protection zones',rules:['IG-13','IG-05','IG-06']},
+ {key:'surface',label:'Surface water flood risk',options:['High','Medium','Low','Very low'],source:'Environment Agency long-term flood risk (surface water)',rules:['FR-04','FR-12','FE-08']},
+ {key:'infiltration',label:'Infiltration SuDS map class',options:['Highly compatible for infiltration SuDS','Probably compatible for infiltration SuDS','Opportunities for bespoke infiltration SuDS','Very significant constraints are indicated'],source:'BGS Infiltration SuDS Map',rules:['IG-01','IG-02','IG-07','RD-17']}
+];
+
+function validDate(s,blank=false){if(s===''&&blank)return true;if(typeof s!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(s))return false;const [y,m,d]=s.split('-').map(Number);if(y<1||m<1||m>12||d<1)return false;return d<=[31,(y%4===0&&(y%100!==0||y%400===0))?29:28,31,30,31,30,31,31,30,31,30,31][m-1];}
+const S=v=>typeof v==='string'?v:'';
+// Map links, checked against the live services on 2 October 2026. Only the first three accept a location in the address.
+const MAPS=[
+ {key:'fmfp',name:'Flood Map for Planning',owner:'Environment Agency',shows:'Flood zones from rivers and the sea',constraint:'flood',home:'https://flood-map-for-planning.service.gov.uk/',at:(E,N)=>'https://flood-map-for-planning.service.gov.uk/map?cz='+E+','+N+',15'},
+ {key:'surface',name:'Long-term flood risk: surface water',owner:'Environment Agency',shows:'Surface water flood risk bands',constraint:'surface',home:'https://check-long-term-flood-risk.service.gov.uk/',at:(E,N)=>'https://check-long-term-flood-risk.service.gov.uk/map?easting='+E+'&northing='+N+'&map=SurfaceWater'},
+ {key:'spz',name:'Groundwater source protection zones',owner:'Defra MAGIC map',shows:'Source protection zones, with the zone layer switched on',constraint:'spz',home:'https://magic.defra.gov.uk/MagicMap.html',at:(E,N)=>'https://magic.defra.gov.uk/MagicMap.html?chosenLayers=sourcepz&xygridref='+E+','+N+'&startScale=10000'},
+ {key:'bgs',name:'Infiltration SuDS Map',owner:'British Geological Survey',shows:'Infiltration suitability classes',constraint:'infiltration',home:'https://www.bgs.ac.uk/datasets/infiltration-suds-map/',limit:'Licensed BGS data with no free viewer. A paid site report is available from the BGS shop.'},
+ {key:'sww',name:'Public sewer records',owner:'South West Water',shows:'Public sewers, lateral drains and water mains',home:'https://www.sourceforsearches.co.uk/commercial/recommended/underground-asset-plan/',limit:'No public map. South West Water directs requests to Source for Searches; the asset plan is a paid product.',extra:[['South West Water guidance','https://www.southwestwater.co.uk/household/help-support/faqs/drinking-water']]},
+ {key:'torbay',name:'Critical drainage area and flood reports',owner:'Torbay Council',shows:'Critical drainage area map, SFRA 2026 maps and Section 19 flood investigation reports',constraint:'cda',home:'https://www.torbay.gov.uk/emergencies/extreme-weather/flooding/reports-and-legislation/',limit:'Published as PDF documents, so it opens at the list of reports.',extra:[['Critical drainage area map (PDF, May 2015)','https://www.torbay.gov.uk/media/uzipbiws/cda-torbay-may-2015-v2.pdf']]}
+];
+function mapLinks(site){const ok=site&&Number.isFinite(site.easting)&&Number.isFinite(site.northing);return MAPS.map(m=>({...m,url:m.at&&ok?m.at(site.easting,site.northing):m.home,centred:!!(m.at&&ok)}));}
+
+
+/* ---------- OS grid references ---------- */
+function letterIndex(ch){let i=ch.charCodeAt(0)-65;if(i<0||i>25||i===8)return -1;return i>7?i-1:i;}
+function fromGridLetters(letters,digits){
+ const l1=letterIndex(letters[0]),l2=letterIndex(letters[1]);if(l1<0||l2<0)throw Error('Enter a valid OS grid reference, for example SX 91800 63900.');
+ const e100=((l1-2)%5+5)%5*5+(l2%5),n100=(19-Math.floor(l1/5)*5)-Math.floor(l2/5);
+ if(e100<0||e100>6||n100<0||n100>12)throw Error('That grid square is outside Great Britain.');
+ if(digits.length%2||digits.length<2||digits.length>10)throw Error('A grid reference needs an even number of digits, for example SX 9180 6390.');
+ const h=digits.length/2,scale=10**(5-h);
+ return {easting:e100*1e5+Number(digits.slice(0,h))*scale,northing:n100*1e5+Number(digits.slice(h))*scale};
+}
+function parseLocation(text){
+ const t=S(text).trim().toUpperCase();if(!t)throw Error('Enter an OS grid reference or an easting and northing.');
+ let m=t.replace(/\s+/g,'').match(/^([A-Z]{2})(\d{2,10})$/);
+ let loc;
+ if(m)loc=fromGridLetters(m[1],m[2]);
+ else{m=t.match(/^E?\s*:?\s*(\d{5,6}(?:\.\d+)?)\s*[,;\/\s]\s*N?\s*:?\s*(\d{5,7}(?:\.\d+)?)$/);
+  if(!m)throw Error('Enter an OS grid reference (SX 91800 63900) or an easting and northing (291800, 63900).');
+  loc={easting:Math.round(Number(m[1])),northing:Math.round(Number(m[2]))};}
+ if(loc.easting<0||loc.easting>=700000||loc.northing<0||loc.northing>=1300000)throw Error('That location is outside Great Britain.');
+ return {...loc,grid:toGridRef(loc.easting,loc.northing),inTorbay:loc.easting>=280000&&loc.easting<=300000&&loc.northing>=48000&&loc.northing<=72000};
+}
+function toGridRef(easting,northing){
+ easting=Math.round(easting);northing=Math.round(northing);
+ if(!Number.isFinite(easting)||!Number.isFinite(northing)||easting<0||easting>=700000||northing<0||northing>=1300000)throw Error('That location is outside Great Britain.');
+ const e100=Math.floor(easting/1e5),n100=Math.floor(northing/1e5);
+ let l1=(19-n100)-(19-n100)%5+Math.floor((e100+10)/5),l2=(19-n100)*5%25+e100%5;
+ if(l1>7)l1++;if(l2>7)l2++;
+ const pad=v=>String(Math.round(v)%1e5).padStart(5,'0');
+ return String.fromCharCode(65+l1)+String.fromCharCode(65+l2)+' '+pad(easting)+' '+pad(northing);
+}
+
+/* OSGB36 national grid to WGS84 latitude and longitude (Airy 1830 inverse transverse Mercator, then a Helmert shift). */
+function osgbToLatLon(E,N){
+ const a=6377563.396,b=6356256.909,F0=0.9996012717,lat0=49*Math.PI/180,lon0=-2*Math.PI/180,N0=-100000,E0=400000,e2=1-b*b/(a*a),n=(a-b)/(a+b);
+ let lat=lat0,M=0;
+ do{lat=(N-N0-M)/(a*F0)+lat;
+  const Ma=(1+n+5/4*n*n+5/4*n**3)*(lat-lat0),Mb=(3*n+3*n*n+21/8*n**3)*Math.sin(lat-lat0)*Math.cos(lat+lat0),Mc=(15/8*n*n+15/8*n**3)*Math.sin(2*(lat-lat0))*Math.cos(2*(lat+lat0)),Md=35/24*n**3*Math.sin(3*(lat-lat0))*Math.cos(3*(lat+lat0));
+  M=b*F0*(Ma-Mb+Mc-Md);}while(Math.abs(N-N0-M)>=0.00001);
+ const s=Math.sin(lat),c=Math.cos(lat),t=Math.tan(lat),nu=a*F0/Math.sqrt(1-e2*s*s),rho=a*F0*(1-e2)/Math.pow(1-e2*s*s,1.5),eta2=nu/rho-1,dE=E-E0;
+ const VII=t/(2*rho*nu),VIII=t/(24*rho*nu**3)*(5+3*t*t+eta2-9*t*t*eta2),IX=t/(720*rho*nu**5)*(61+90*t*t+45*t**4);
+ const X=1/(c*nu),XI=1/(c*6*nu**3)*(nu/rho+2*t*t),XII=1/(c*120*nu**5)*(5+28*t*t+24*t**4),XIIA=1/(c*5040*nu**7)*(61+662*t*t+1320*t**4+720*t**6);
+ const phi=lat-VII*dE**2+VIII*dE**4-IX*dE**6,lam=lon0+X*dE-XI*dE**3+XII*dE**5-XIIA*dE**7;
+ const osgb={lat:phi*180/Math.PI,lon:lam*180/Math.PI};
+ // Cartesian on Airy, Helmert to WGS84, back to geodetic on GRS80
+ const sp=Math.sin(phi),cp=Math.cos(phi),v=a/Math.sqrt(1-e2*sp*sp),x1=v*cp*Math.cos(lam),y1=v*cp*Math.sin(lam),z1=(1-e2)*v*sp;
+ const tx=446.448,ty=-125.157,tz=542.060,sc=-20.4894e-6,sec=Math.PI/(180*3600),rx=0.1502*sec,ry=0.2470*sec,rz=0.8421*sec;
+ const x2=tx+(1+sc)*x1-rz*y1+ry*z1,y2=ty+rz*x1+(1+sc)*y1-rx*z1,z2=tz-ry*x1+rx*y1+(1+sc)*z1;
+ const a2=6378137,b2=6356752.3141,e22=1-b2*b2/(a2*a2),p=Math.hypot(x2,y2);
+ let la=Math.atan2(z2,p*(1-e22)),prev;do{prev=la;const v2=a2/Math.sqrt(1-e22*Math.sin(la)**2);la=Math.atan2(z2+e22*v2*Math.sin(la),p);}while(Math.abs(la-prev)>1e-12);
+ return {lat:la*180/Math.PI,lon:Math.atan2(y2,x2)*180/Math.PI,osgb};
+}
+
+/* ---------- Constraint records ---------- */
+function blankConstraints(){return Object.fromEntries(CONSTRAINTS.map(c=>[c.key,{result:'',source:c.source,checked:'',note:''}]));}
+function constraintLines(record){const out=[];for(const c of CONSTRAINTS){const v=record.constraints?.[c.key];if(v?.result)out.push(c.label+': '+v.result+' ('+[v.source,v.checked&&'checked '+formatDate(v.checked)].filter(Boolean).join(', ')+')'+(v.note?.trim()?'. '+v.note.trim():''));}return out;}
+function formatDate(iso){if(!validDate(iso))return S(iso);const m=S(iso).match(/^(\d{4})-(\d{2})-(\d{2})$/);if(!m)return S(iso);return Number(m[3])+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][Number(m[2])-1]+' '+m[1];}
+
+/* ---------- Consultation response ---------- */
+function blankResponse(){return {recommendation:'',reasons:[],conditions:[],informatives:[],officer:'',role:'',date:'',added:''};}
+// Checks that support a reason: information needed, or a requirement or criterion not met. An accepted alternative to a recommendation is not a reason.
+function reasonCandidates(record,data){
+ const out=[];for(const r of data.rules){const v=record.checks?.[r.id];if(!v)continue;
+  if(v.status==='information'||v.status==='not-met'&&!(r.status==='rec'&&S(v.note).trim()))out.push({rule:r.id,status:v.status,text:r.id+' '+r.title+': '+(S(v.note).trim()||'[Enter the finding.]')});}
+ return out;
+}
+// Adds reasons for findings not yet listed. Never changes a reason the officer has edited.
+function syncReasons(response,record,data){const candidates=new Map(reasonCandidates(record,data).map(r=>[r.rule,r]));let changed=false;for(const r of response.reasons){const c=candidates.get(r.rule);if(r.auto===true&&c&&r.text===r.generatedText&&r.text!==c.text){r.text=c.text;r.generatedText=c.text;changed=true;}}return changed;}
+function refreshReasons(response,record,data){syncReasons(response,record,data);const have=new Set(response.reasons.map(r=>r.rule).filter(Boolean));let added=0;for(const c of reasonCandidates(record,data))if(!have.has(c.rule)){response.reasons.push({rule:c.rule,text:c.text,auto:true,generatedText:c.text});added++;}return added;}
+// One structure for the copyable text and the printed response.
+function responseSections(record,data,types={}){
+ const r={...blankResponse(),...(record.response||{})},rec=RECOMMENDATIONS.find(x=>x[0]===r.recommendation),site=record.site||{},d=record.draft||{};
+ const meta=[['Application',record.ref+(types[record.type]?' ('+types[record.type]+')':'')]];
+ if(S(site.address).trim())meta.push(['Site',site.address.trim()]);
+ if(site.grid)meta.push(['Grid reference',site.grid+' (E '+site.easting+', N '+site.northing+')'+(site.locationSource?' · '+site.locationSource:'')]);
+ if(S(site.proposal).trim())meta.push(['Proposal',site.proposal.trim()]);
+ meta.push(['Review round',String(d.number||1)+(d.date?', reviewed '+formatDate(d.date):'')]);
+ if(S(d.revision).trim())meta.push(['Documents reviewed',d.revision.trim()]);
+ meta.push(['Guidance basis','Torbay drainage and SuDS guide '+(record.version||data.version)]);
+ const blocks=[{heading:'Recommendation',items:[rec?rec[1]:'[Choose a recommendation.]'],plain:true}];
+ const cons=constraintLines(record);if(cons.length)blocks.push({heading:'Site constraints',items:cons,bullets:true});
+ const unresolved=new Set(reasonCandidates(record,data).map(x=>x.rule));
+ const reasons=(r.reasons||[]).map(x=>(x.rule&&!unresolved.has(x.rule)?'[Review required: '+x.rule+' no longer has an unresolved finding.]\n':'')+(staleNumericReason(x,record)?'[Review required: the figures behind this reason have changed.]\n':'')+S(x.text).trim()).filter(Boolean);if(reasons.length)blocks.push({heading:'Reasons',items:reasons,numbered:true});
+ const info=(record.rfi||[]).map(x=>(x.origin!==undefined&&x.origin!==JSON.stringify({round:record.draft?.number,status:record.checks?.[x.rule]?.status||'unreviewed',note:record.checks?.[x.rule]?.note||'',basis:record.checks?.[x.rule]?.basisVersion||record.version})||!x.origin?'[Review required: check this request against the current finding.]\n':'')+S(x.text).trim()).filter(Boolean);if(info.length)blocks.push({heading:'Information required',items:info,plain:true});
+ for(const [key,heading] of [['conditions','Conditions'],['informatives','Informatives']]){const v=(r[key]||[]).filter(x=>S(x.text).trim()||S(x.title).trim()).map(x=>(S(x.title).trim()?x.title.trim()+'\n':'')+S(x.text).trim());if(v.length)blocks.push({heading,items:v,numbered:true});}
+ const sign=[r.officer,r.role].map(v=>S(v).trim()).filter(Boolean);if(r.date)sign.push(formatDate(r.date));
+ return {title:'Drainage consultation response',meta,blocks,sign};
+}
+function responseText(record,data,types={}){
+ const s=responseSections(record,data,types),L=[s.title.toUpperCase(),''];
+ for(const [k,v] of s.meta)L.push(k+': '+v);
+ for(const b of s.blocks){L.push('',b.heading.toUpperCase());b.items.forEach((x,i)=>L.push((b.numbered?(i+1)+'. ':b.bullets?'- ':'')+x+(b.plain&&i<b.items.length-1?'\n':'')));}
+ if(s.sign.length)L.push('',...s.sign);
+ return L.join('\n').replace(/\n{3,}/g,'\n\n').trim()+'\n';
+}
+
+/* ---------- Key numbers ---------- */
+// Figures recorded from each document. Limits quote the guide text of the linked rule. Engineering content: listed for review, not approved.
+const NUMBERS=[
+ {key:'impermeable',label:'Proposed impermeable area',unit:'m²',rules:['RV-11']},
+ {key:'creep',label:'Urban creep allowance',unit:'%',rules:['RV-11']},
+ {key:'cc30',label:'Climate change allowance, 3.3% AEP',unit:'%',rules:['RV-10']},
+ {key:'cc100',label:'Climate change allowance, 1% AEP',unit:'%',rules:['RV-10']},
+ {key:'gf50',label:'Greenfield rate, 50% AEP (Qbar or Qmed)',unit:'l/s',rules:['RV-02','RV-03']},
+ {key:'gf10',label:'Greenfield rate, 1 in 10 year (Q10)',unit:'l/s',rules:['RV-02']},
+ {key:'area',label:'Area used for 3 l/s/ha',unit:'ha',rules:['RV-03']},
+ {key:'q50',label:'Discharge rate, 50% AEP',unit:'l/s',rules:['RV-02','RV-03']},
+ {key:'q30',label:'Discharge rate, 3.3% AEP plus climate change',unit:'l/s',rules:['RV-02']},
+ {key:'q100',label:'Discharge rate, 1% AEP plus climate change',unit:'l/s',rules:['RV-02']},
+ {key:'storage',label:'Attenuation storage volume',unit:'m³',rules:[]},
+ {key:'infil',label:'Infiltration rate',unit:'m/s',rules:['IG-07']},
+ {key:'halfdrain',label:'Half-drain time',unit:'h',rules:['IG-08']},
+ {key:'fos',label:'Factor of safety',unit:'',rules:['IG-09']}
+];
+const SUP={'⁰':'0','¹':'1','²':'2','³':'3','⁴':'4','⁵':'5','⁶':'6','⁷':'7','⁸':'8','⁹':'9','⁻':'-','⁺':'+','−':'-','–':'-'};
+// Accepts 4.5, 1,250, 2.3e-6, 2.3x10-6, 2.3×10⁻⁶ or 2.3 x 10^-6, with or without a trailing unit.
+function parseNumber(text,field){
+ let t=S(text).trim().replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹⁻⁺−–]/g,c=>SUP[c]);
+ if(t.includes(',')){if(!/^[+-]?[1-9]\d{0,2}(?:,\d{3})+(?:\.\d+)?(?:\s|$)/.test(t))return NaN;t=t.replace(/,/g,'');}
+ const suffix=t.match(/\s*(l\/s|m\/s|m\/h|m\^?[23]|%|ha|hours?|hrs?|h)\s*$/i);
+ const unit=suffix?suffix[1].toLowerCase().replace(/^m\^?([23])$/,'m$1').replace(/^(?:hours?|hrs?)$/,'h'):'';
+ if(suffix)t=t.slice(0,suffix.index).trim();
+ const m=t.match(/^([+-]?(?:\d+\.?\d*|\.\d+))(?:\s*(?:[x×*]\s*10\s*\^?\s*|e)\s*([+-]?\d+))?$/i);
+ if(!m)return NaN;
+ let value=Number(m[1])*(m[2]!==undefined?10**Number(m[2]):1);
+ if(!Number.isFinite(value)||value===0&&/[1-9]/.test(m[1]))return NaN;
+ const f=typeof field==='string'?NUMBERS.find(x=>x.key===field):field;
+ if(f){const expected=f.unit.replace(/²/g,'2').replace(/³/g,'3');
+  if(unit&&unit!==expected){if(unit==='m/h'&&expected==='m/s')value/=3600;else return NaN;}
+  if(value<0)return NaN;
+  if(!Number.isFinite(value)||value===0&&/[1-9]/.test(m[1]))return NaN;
+ }
+ return value;
+}
+function unsupportedUnit(raw,f){const m=S(raw).trim().match(/^([+\-]?(?:\d[\d,.]*|\.\d+)(?:e[+\-]?\d+)?)\s*([a-z%][a-z0-9²³^/%]*)$/i);return !!m&&!!m[2]&&m[2].toLowerCase()!==f.unit.toLowerCase()&&!(f.key==='infil'&&m[2].toLowerCase()==='m/h');}
+function blankNumbers(){return {docs:[{id:'d1',name:''},{id:'d2',name:''}],values:{}};}
+function docName(n,i){return S(n.docs[i].name).trim()||'Document '+(i+1);}
+function round(v){return v!==0&&Math.abs(v)<0.01?v.toExponential(2):Number(v.toFixed(2)).toString();}
+function nextDocumentId(n){const used=new Set(n.docs.map(d=>d.id));let i=1;while(used.has('d'+i))i++;return 'd'+i;}
+function flagIdentity(f,record){
+ const identity=[f.kind,f.key,f.doc||'',f.rules||[],f.text];if(!record)return JSON.stringify(identity);
+ const keys=['q50','q30','q100','gf50','gf10','area'].includes(f.key)?['q50','q30','q100','gf50','gf10','area']:[f.key],n=record.numbers;
+ return JSON.stringify([...identity,{basis:record.version||'',round:record.draft?.number||1,cda:keys.includes('q50')?record.constraints?.cda?.result||'':'',documents:(n?.docs||[]).filter(d=>!f.doc||keys.includes('q50')||d.id===f.doc).map(d=>({id:d.id,name:d.name||'',values:keys.map(k=>[k,n.values?.[k]?.[d.id]||''])})),checks:(f.rules||[]).map(id=>[id,record.checks?.[id]?.status||'unreviewed',record.checks?.[id]?.basisVersion||record.version||''])}]);
+}
+function staleNumericReason(reason,record){return !!reason.numericOrigin&&!numberFlags(record).some(f=>flagIdentity(f,record)===reason.numericOrigin);}
+function withUnit(f,raw){const r=S(raw).trim();return r+(f.unit&&!/(?:l\/s|m\/s|m\/h|m\^?[23]|m[²³]|%|ha|hours?|hrs?|h)\s*$/i.test(r)?(f.unit==='%'?'':' ')+f.unit:'');}
+function numberFlags(record){
+ const n=record.numbers;if(!n||!Array.isArray(n.docs))return [];
+ const out=[],def=Object.fromEntries(NUMBERS.map(f=>[f.key,f]));
+ const raw=(k,d)=>S(n.values?.[k]?.[d.id]).trim(),num=(k,d)=>{const r=raw(k,d);return r?parseNumber(r,def[k]):NaN;},show=(k,d)=>withUnit(def[k],raw(k,d));
+ // A reference figure missing from one document is taken from the others when they all agree.
+ const ref=(k,d)=>{const own=num(k,d);if(Number.isFinite(own))return own;const all=[...new Set(n.docs.map(x=>num(k,x)).filter(Number.isFinite))];return all.length===1?all[0]:NaN;};
+ for(const f of NUMBERS){const given=n.docs.map((d,i)=>({d,i,r:raw(f.key,d),v:num(f.key,d)})).filter(x=>x.r);
+  for(const x of given)if(!Number.isFinite(x.v))out.push({kind:'entry',key:f.key,rules:[],doc:x.d.id,text:f.label+' in '+docName(n,x.i)+(unsupportedUnit(x.r,f)?' uses a unit this table does not convert. Enter the value in '+(f.key==='infil'?'m/s or m/h':f.unit||'the stated units')+'.':' is not a valid non-negative number'+(f.unit?' in '+f.unit:'')+': '+x.r+'.')});
+  const ok=given.filter(x=>Number.isFinite(x.v));
+  if(ok.some(x=>Math.abs(x.v-ok[0].v)>1e-9*Math.max(Math.abs(x.v),Math.abs(ok[0].v))))out.push({kind:'mismatch',key:f.key,rules:f.rules,text:'Documents disagree. '+f.label+': '+ok.map(x=>docName(n,x.i)+' '+withUnit(f,x.r)).join('; ')+'.'});}
+ const cdaOut=record.constraints?.cda?.result==='Outside the critical drainage area',cdaInside=record.constraints?.cda?.result==='Inside the critical drainage area';
+ n.docs.forEach((d,i)=>{const name=docName(n,i),flag=(kind,key,rule,text)=>out.push({kind,key,rules:[rule],doc:d.id,text:name+': '+text}),limit=(key,rule,text)=>flag('limit',key,rule,text),review=(key,rule,text)=>flag('review',key,rule,text);
+  const q50=num('q50',d),q30=num('q30',d),q100=num('q100',d),gf50=ref('gf50',d),gf10=ref('gf10',d),area=ref('area',d);
+  if(Number.isFinite(area)&&(area<=0||!Number.isFinite(3*area)))flag('entry','area','RV-03','Enter a positive, finite area that can be used for the 3 l/s/ha comparison.');
+   if(Number.isFinite(q50)&&!(Number.isFinite(gf50)&&Number.isFinite(gf10)&&gf50>gf10)){const haveRate=Number.isFinite(gf50),haveArea=Number.isFinite(area),floor=haveArea?3*area:NaN;
+    if(haveArea&&(!Number.isFinite(floor)||area<=0)){/* Already flagged above; do not compare an invalid area. */}
+    else if(haveRate&&haveArea){const cap=Math.max(gf50,floor);if(q50>cap*(1+1e-9))limit('q50','RV-03','50% AEP discharge '+show('q50',d)+' exceeds the unrounded RV-03 limit (approximately '+round(cap)+' l/s), the greater of Qbar ('+round(gf50)+' l/s) and 3 l/s/ha ('+round(floor)+' l/s).');}
+    else if(!(haveRate&&q50<=gf50*(1+1e-9))&&!(haveArea&&q50<=floor*(1+1e-9)))review('q50','RV-03','The RV-03 limit cannot be determined for discharge '+show('q50',d)+'. Record '+[!haveRate?'the 50% AEP greenfield rate':null,!haveArea?'the area used for 3 l/s/ha':null].filter(Boolean).join(' and ')+'; the limit is the greater of those two allowances.');}
+  if(!cdaOut&&!(Number.isFinite(gf50)&&Number.isFinite(gf10)&&gf50>gf10)){
+   const cdaFlag=(key,text)=>{if(cdaInside)limit(key,'RV-02',text);else review(key,'RV-02','Confirm that the CDA criteria and local planning policy apply before assessing RV-02. '+text);};
+   if(Number.isFinite(q50)&&Number.isFinite(gf50)&&q50>gf50*(1+1e-9))cdaFlag('q50','50% AEP discharge '+show('q50',d)+' exceeds the unrounded 50% AEP greenfield criterion (approximately '+round(gf50)+' l/s). RV-02 asks discharges to mimic greenfield performance.');
+   if(Number.isFinite(gf10))for(const [k,v,label] of [['q50',q50,'50% AEP'],['q30',q30,'3.3% AEP'],['q100',q100,'1% AEP']])if(Number.isFinite(v)&&v>gf10*(1+1e-9))cdaFlag(k,label+' discharge '+show(k,d)+' exceeds the unrounded 1 in 10 year greenfield criterion (approximately '+round(gf10)+' l/s), the RV-02 maximum.');}
+  if(Number.isFinite(q100))review('q100','RV-04','The national 1% AEP discharge limit is not assessed by this table. Check the 1% AEP, 6-hour volume comparison and the applicable rate criterion in RV-04 to RV-06.');
+  if(Number.isFinite(gf50)&&Number.isFinite(gf10)&&gf50>gf10)flag('entry','gf50','RV-02','The 50% AEP greenfield rate exceeds Q10. Check the reference figures before using the discharge criteria.');
+  const fos=num('fos',d);if(fos===0)flag('entry','fos','IG-09','Factor of safety must be greater than zero.');else if(Number.isFinite(fos))review('fos','IG-09','Check the infiltration method, drained area and consequences against the applicable factor-of-safety guidance; this table does not establish that context.');
+  const cc30=num('cc30',d),cc100=num('cc100',d),creep=num('creep',d),infil=num('infil',d),half=num('halfdrain',d);
+  if(cc30<40)review('cc30','RV-10','Review the design life and selected epoch for the 3.3% AEP allowance '+show('cc30',d)+'. RV-10 gives +35% for the 2050s and +40% for the 2070s; the applicable assessment basis is not recorded in Key numbers.');
+  if(cc100<50)review('cc100','RV-10','Review the design life, selected epoch and local assessment basis for the 1% AEP allowance '+show('cc100',d)+'. RV-10 gives +45% for the 2050s and +50% for the 2070s and requires the published local criterion to be addressed.');
+  if(creep<10)limit('creep','RV-11','urban creep '+show('creep',d)+' is below the 10% Torbay expects on the proposed impermeable area.');
+  if(Number.isFinite(infil))review('infil','IG-07','If this rate supports point infiltration, compare '+show('infil',d)+' with the 1×10⁻⁶ m/s criterion in IG-07. Key numbers does not record whether the feature uses point or diffuse infiltration; confirm the feature and evidence before deciding applicability.');
+  if(Number.isFinite(half))review('halfdrain','IG-08','If this time relates to events up to 3.3% AEP, compare '+show('halfdrain',d)+' with the 24-hour criterion in IG-08. Key numbers does not record the modelled event; check it and the feature evidence before deciding the outcome.');
+ });
+ return out;
+}
+function numberRows(record){const n=record.numbers;if(!n||!Array.isArray(n.docs))return [];return NUMBERS.map(f=>({key:f.key,label:f.label+(f.unit?' ('+f.unit+')':''),values:n.docs.map(d=>S(n.values?.[f.key]?.[d.id]).trim())})).filter(r=>r.values.some(Boolean));}
+
+/* ---------- Additive record fields ---------- */
+function validateAdditions(c){
+ const object=x=>x&&typeof x==='object'&&!Array.isArray(x),fail=()=>{throw Error('The exported assessment contains an invalid record structure.');};
+ const strings=(o,keys)=>keys.every(k=>o[k]===undefined||typeof o[k]==='string');
+ const site=s=>{if(s===undefined)return;if(!object(s)||!strings(s,['address','proposal','location','grid','locationSource'])||['easting','northing'].some(k=>s[k]!==undefined&&s[k]!==null&&!Number.isFinite(s[k])))fail();const located=Number.isFinite(s.easting)&&Number.isFinite(s.northing);if(Number.isFinite(s.easting)!==Number.isFinite(s.northing)||S(s.grid).trim()&&!located||located&&(s.easting<0||s.easting>=700000||s.northing<0||s.northing>=1300000))fail();if(S(s.grid).trim()&&s.grid!==toGridRef(s.easting,s.northing))fail();};
+ const cons=m=>{if(m===undefined)return;if(!object(m)||Object.values(m).some(v=>!object(v)||!strings(v,['result','source','checked','note'])||v.checked&&!validDate(v.checked)))fail();for(const [key,v] of Object.entries(m)){const def=CONSTRAINTS.find(k=>k.key===key);if(v.result&&(!def||!def.options.includes(v.result)))throw Error('The imported '+key+' constraint result is not supported. Review the original export.');}};
+ const list=a=>Array.isArray(a)&&a.every(x=>object(x)&&strings(x,['rule','title','text','generatedText','numericOrigin'])&&(x.auto===undefined||typeof x.auto==='boolean'));
+ const resp=r=>{if(r===undefined)return;if(!object(r)||r.date&&!validDate(r.date)||!strings(r,['recommendation','officer','role','date','added'])||['reasons','conditions','informatives'].some(k=>r[k]!==undefined&&!list(r[k])))fail();};
+ const nums=n=>{if(n===undefined)return;if(!object(n)||!Array.isArray(n.docs)||n.docs.length<1||n.docs.length>6||!n.docs.every(d=>object(d)&&typeof d.id==='string'&&/^[A-Za-z0-9_-]{1,80}$/.test(d.id)&&!['__proto__','prototype','constructor'].includes(d.id)&&strings(d,['name']))||new Set(n.docs.map(d=>d.id)).size!==n.docs.length||!object(n.values)||Object.values(n.values).some(v=>!object(v)||Object.values(v).some(x=>typeof x!=='string')))fail();};
+ site(c.site);cons(c.constraints);resp(c.response);nums(c.numbers);
+ for(const round of c.rounds||[]){site(round.site);cons(round.constraints);resp(round.response);nums(round.numbers);}
+ return c;
+}
+function ensure(record){
+ record.site=record.site&&typeof record.site==='object'?record.site:{};
+ record.constraints={...blankConstraints(),...(record.constraints||{})};
+ for(const c of CONSTRAINTS)record.constraints[c.key]={result:'',source:c.source,checked:'',note:'',...record.constraints[c.key]};
+ const r=record.response&&typeof record.response==='object'?record.response:{};
+ record.response={...blankResponse(),...r};for(const k of ['reasons','conditions','informatives'])if(!Array.isArray(record.response[k]))record.response[k]=[];
+ const n=record.numbers&&typeof record.numbers==='object'&&Array.isArray(record.numbers.docs)?record.numbers:blankNumbers();if(!n.values||typeof n.values!=='object')n.values={};for(const d of n.docs)d.name=S(d.name);record.numbers=n;
+ return record;
+}
+function setLocation(record,text){ensure(record);const loc=parseLocation(text);if(record.site.grid!==loc.grid)record.site.locationSource="";Object.assign(record.site,{location:S(text).trim(),grid:loc.grid,easting:loc.easting,northing:loc.northing});return loc;}
+
+return {RECOMMENDATIONS,CONSTRAINTS,MAPS,mapLinks,parseLocation,toGridRef,osgbToLatLon,blankConstraints,constraintLines,formatDate,blankResponse,reasonCandidates,syncReasons,refreshReasons,responseSections,responseText,validateAdditions,ensure,setLocation,NUMBERS,parseNumber,blankNumbers,numberFlags,numberRows,nextDocumentId,flagIdentity,staleNumericReason,validDate};
+});

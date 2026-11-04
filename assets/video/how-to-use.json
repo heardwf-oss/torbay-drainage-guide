@@ -1,0 +1,113 @@
+{
+  "guideVersion": "5.1",
+  "recordedDate": "2026-10-02",
+  "durationSeconds": 450,
+  "chapters": [
+    {
+      "id": 1,
+      "title": "Start with the job",
+      "start": 0,
+      "transcript": [
+        "This guide brings the drainage checks, supporting sources and assessment record together. We’ll work through an example housing application: find the relevant guidance, check the submission, request missing evidence and record the next review. The application and documents in this demonstration are fictional. You can jump to any stage using the chapters below the video."
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Find a starting route",
+      "start": 23.083,
+      "transcript": [
+        "If you are unsure where to start, open Find guidance for a proposal. Choose the application stage, discharge destination, drainage features and known constraints. Here, we have a non-major full application proposing infiltration. The result gives us a starting sequence and relevant checks. Open the application checklist for the evidence expected at that stage. The route helps you prioritise; the full set of assessment checks remains available."
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Open the assessment",
+      "start": 52.544,
+      "transcript": [
+        "Open Assess an application. Enter the application reference and type, then open the record. A saved assessment can be reopened from this page. Each job has its own record, and each revised submission has its own review round. We’ll use the sections across the top to work from the site through to the consultation response. Browser saving is local: export a copy for the case file."
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Establish the site and constraints",
+      "start": 77.986,
+      "transcript": [
+        "Start with Site and constraints. Enter the proposal and a site grid reference. The postcode lookup can give you an approximate starting location; check it against the actual site. Open the relevant maps and record the result, source and date for each constraint. Some links centre on the location; others open a report list or a separate service. Follow the related-check links to see what a constraint affects. A map link does not record its answer for you."
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Compare the documents",
+      "start": 107.471,
+      "transcript": [
+        "In Key numbers, name the documents and revisions, then enter their figures in the correct units. Add another document when you need a comparison. Our strategy and calculation sheet give different impermeable areas. The flag draws attention to that disagreement and links to the relevant checks. Confirm the reason in the original documents and record your finding. A number with no flag still needs to be checked against the design and its assumptions."
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Read a check and record a finding",
+      "start": 134.886,
+      "transcript": [
+        "Now open Checks and record the documents, revisions and review date. Use the topics and outcome filter to work through the submission. The labels distinguish requirements, conditional requirements, Torbay criteria, recommendations and officer guidance. Read when each check applies.",
+        "For our infiltration proposal, open I G zero two. Read What to check, Evidence to look for and Gap to check. Read source wording opens the original wording and references beside the check, with evidence and examples where available.",
+        "Our report gives a test result but omits the test location and depth. Choose More information needed. In the finding, name the document, revision and page, then explain what is missing. Use Not applicable only with a recorded reason. The summary keeps missing evidence, unmet criteria, alternatives and unreviewed checks visible."
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Use uploaded evidence and guidance chat",
+      "start": 192.47,
+      "transcript": [
+        "You can also upload published or anonymised PDF and Word reports. Check the report titles and revisions, confirm that the documents may be used, and inspect the extracted text. Drawings, scans and anything the extraction misses still need a manual check.",
+        "Prepare preliminary review shows the request allowance before you start. Open a preliminary finding, read its quoted evidence and follow the linked guidance. Edit the finding, choose the outcome yourself and accept it into the matching assessment. Work through the remaining findings in the same way.",
+        "For a focused question, open the guidance chat. Choose guidance only, or the relevant uploaded evidence. Ask what is needed to support the infiltration test. Follow the answer’s references and check the original evidence before relying on it. The panel can stay open alongside the page."
+      ]
+    },
+    {
+      "id": 8,
+      "title": "Turn findings into a clear request",
+      "start": 247.241,
+      "transcript": [
+        "In Summary and conclusion, review the outstanding findings and write the next action. Then open Request information. Select the findings to include and choose Prepare selected paragraphs. Each paragraph can be edited, reordered or removed. Make the request specific to the submission: here, we need a plan locating the infiltration tests, their depths and the supporting test records. Read the complete wording, then copy the request into the council’s normal correspondence process."
+      ]
+    },
+    {
+      "id": 9,
+      "title": "Review a revised submission",
+      "start": 278.266,
+      "transcript": [
+        "When that review round is finished, complete it to preserve its findings and documents. Start revised submission, enter the new references and review date, and open the next round.",
+        "Return to the outstanding check. The original finding is retained. Record the applicant’s response and revised evidence reference, then assess the new evidence and record the outcome. Other findings may carry forward, but recheck anything affected by the revised design. Earlier rounds lets you read the history. In this example, the test-location query is answered, but the wider testing evidence still needs checking. The separate area discrepancy remains outstanding."
+      ]
+    },
+    {
+      "id": 10,
+      "title": "Prepare the consultation response",
+      "start": 320.296,
+      "transcript": [
+        "Open Consultation response and choose the recommendation supported by your review. Our remaining discrepancy calls for further information. Check the reasons and information required, and edit them to match the current findings. Add suitable conditions or informatives only where they are appropriate. Enter the officer details, read the assembled response, then copy it or use Print response to save the finished document as a PDF. Open the saved document and check it before issue. Recording a recommendation here does not send it to the planning system."
+      ]
+    },
+    {
+      "id": 11,
+      "title": "Keep and reopen the record",
+      "start": 354.83,
+      "transcript": [
+        "Export record creates a file for reopening the assessment, containing the findings, requests, completed rounds and assessment basis. Download it and keep it with the case file. To continue elsewhere, use Import a record and select that exported file. Check the application reference and round when it opens. You can also print the assessment. If the guide flags a change in its source basis, recheck the affected finding before recording that the change has been reviewed."
+      ]
+    },
+    {
+      "id": 12,
+      "title": "Find answers without starting a job",
+      "start": 385.482,
+      "transcript": [
+        "For a quick query, search by rule code, subject or a phrase, and narrow the results when needed. Rules and guidance provides the searchable register, topic pages and proposal route. Read the original sources when the wording or status matters.",
+        "Check a number brings together runoff comparisons, rainfall allowances, infiltration factors and interception criteria. Follow the units and assumptions shown beside each tool. Site maps and Key numbers also work without an application; save those details to a new assessment when you are ready.",
+        "SuDS features connects component design and maintenance guidance to the relevant checks. Review aids contains evidence guides, decision guides and published examples. Sources shows the document versions; Torbay local criteria explains the local context, and the glossary and other-permissions pages help with specific questions.",
+        "The working sequence is the same: find the check, verify the evidence, record your reasoning and keep the review history with the job."
+      ]
+    }
+  ],
+  "mediaRevision": "visual-6-a453a5bc",
+  "pageUrl": "https://torbay-drainage-guide-liam.heardwf.chatgpt.site/how-to-use/"
+}
